@@ -163,6 +163,14 @@ AUTOMATED           是否自动构建
 [root@hadoop100 ~]# docker pull redis
 ```
 
+##### 查看版本
+
+- grep -i  不区分大小写
+
+```
+[root@hadoop100 ~]# docker image inspect 7614ae9453d1 | grep -i version
+```
+
 
 
 ##### df 查看docker的使用情况
@@ -722,6 +730,7 @@ fc3907409a4a   registry   "/entrypoint.sh /etc…"   3 minutes ago   Up 3 minute
 
 
 - 配置Ubuntu的ifconfig
+  - docker run -it Ubuntu /bin/bash
 
 ```
 root@9aa6a47e4d24:/# apt-get update
@@ -733,10 +742,1102 @@ root@9aa6a47e4d24:/# apt-get install net-tools
 - 上传到私有库
 
 ```
-[root@hadoop100 ~]# docker commit -m="add ifconfig" -a="wmt" 9aa6a47e4d24 wmt:1.2
+[root@hadoop100 ~]# docker commit -m="add ifconfig" -a="wmt" 9aa6a47e4d24 ubuntu_ifconfig :1.2
 
 [root@hadoop100 ~]# docker images
 REPOSITORY                                              TAG       IMAGE ID       CREATED         SIZE
-wmt                                                     1.2       ba5ecfba537c   5 seconds ago   116MB
+ubuntu_ifconfig                                         1.2       ba5ecfba537c   5 seconds ago   116MB
 ```
 
+
+
+- 使用curl验证私服库有什么镜像
+
+```
+[root@hadoop100 ~]# curl -XGET http://192.168.206.100:5000/v2/_catalog
+{"repositories":[]}
+```
+
+
+
+- 上传私有库
+  - 基本语法                 tag版本描述
+    -  docker tag 需要上传镜像名称:tag host：port/REPOSITORY:TAG
+
+```
+[root@hadoop100 ~]# docker images
+REPOSITORY                                              TAG       IMAGE ID       CREATED         SIZE
+ubuntu_ifconfig                                         1.2       849476941c81   10 seconds ago   117MB
+
+
+[root@hadoop100 ~]# docker tag ubuntu_ifconfig:1.2 192.168.206.100:5000/myubuntu_ifconfig:1.2
+
+
+[root@hadoop100 ~]# docker images
+REPOSITORY                                              TAG       IMAGE ID       CREATED         SIZE
+192.168.206.100:5000/myubuntu_ifconfig                  1.2       849476941c81   2 minutes ago   117MB
+
+
+
+```
+
+- docker 默认不允许HTTP方式推送镜像	
+  -  vim /etc/docker/daemon.json 
+  - json格式要加,
+
+```
+
+{
+  "registry-mirrors": ["https://nadw34aj.mirror.aliyuncs.com"],
+
+  "insecure-registries":["192.168.206.100:5000"]
+}
+
+```
+
+修改如果不生效====》重启docker
+
+
+
+- push到私有库
+
+```
+[root@hadoop100 ~]# docker tag ubuntu_ifconfig:1.2 192.168.206.100:5000/myubuntu_ifconfig:1.2
+
+[root@hadoop100 ~]# docker push 192.168.206.100:5000/myubuntu_ifconfig:1.2
+```
+
+
+
+- pull 到本地库
+
+```
+[root@hadoop100 ~]# docker pull 192.168.206.100:5000/myubuntu_ifconfig:1.2
+```
+
+
+
+## 5.0 docker 容器数据卷
+
+Docker挂载主机目录访问如果出现cannot open directory .: Permission denied
+
+解决办法:在挂载目录后多加一个--privileged=true参数即可
+
+如果是CentOS7安全模块会比之前系统版本加强，不安全的会先禁止，所以目录挂载的情况被默认为不安全的行为, 在SELinux里面挂载目录被禁止掉了额，如果要开启，我们一-般使用--privileged=true命令，扩大容器的权限解决挂载目录没有权限的问题，也即使用该参数, container内 的root拥有真正的root权限，否则，container内 的root只是外部的一一个 普通用户权限。
+
+
+
+> 什么是容器数据卷
+
+将docker容器内的数据保存进宿主机的磁盘中  类似于我们redis中的rdb和aof文件
+
+
+
+>  容器卷的特点
+
+1:数据卷可在容器之间共享或重用数据
+
+2:卷中的更改可以直接实时生效，爽
+
+3:数据卷中的更改不会包含在镜像的更新中
+
+4:数据卷的生命周期直持续到没有容器使用它为止
+
+
+
+- 基础语法
+  - docker run -it -v /宿主机的绝对路径目录:/容器目录   镜像名
+  - 宿主机的绝对路径目录 和 容器目录里面的数据像vue的双向绑定
+- 实际操作
+  - 宿主机的绝对路径目录  如果不存在会自动创建
+
+```
+[root@hadoop100 ~]# docker run -it --name u1 -v /tmp/host_data:/tmp/docker_data ubuntu
+```
+
+
+
+##### 查看是否挂载成功
+
+- 基本语法
+
+  - docker inspect  容器id
+
+  ```
+  [root@hadoop100 host_data]# docker inspect 3480f68fc277
+  
+   "Mounts": [
+              {
+                  "Type": "bind",
+                  "Source": "/tmp/host_data",
+                  "Destination": "/tmp/docker_data",
+                  "Mode": "",
+                  "RW": true,
+                  "Propagation": "rprivate"
+              }
+  
+  ```
+
+  
+
+##### 限制容器权限
+
+- 基本语法
+  - /容器目录:ro  镜像名                                   只能读不能写                       ro = read only
+- 实际操作
+
+```
+[root@hadoop100 host_data]# docker run -it -v /tmp/host_data:/tmp/docker_data:ro --name ui ba6acccedd29
+
+[root@hadoop100 host_data]# docker inspect ca53d270f9eb
+
+ "Mounts": [
+            {
+                "Type": "bind",
+                "Source": "/tmp/host_data",
+                "Destination": "/tmp/docker_data",
+                "Mode": "ro",
+                "RW": false,
+                "Propagation": "rprivate"
+            }
+
+```
+
+
+
+##### 卷的继承和共享
+
+- 基本语法
+  - docker run -it --name u2 --volumes-from 继承的容器名称  ubuntu
+- 实际操作
+
+```
+[root@hadoop100 /]# docker run -it --name u2 --volumes-from u1  ubuntu
+
+[root@hadoop100 host_data]# docker inspect d4738917c445
+
+ "VolumeDriver": "",
+            "VolumesFrom": [
+                "u1"
+            ],
+
+```
+
+> docker 中的继承不会因为父类的死亡而改变子类的使用，并不会影响 其余跟java中继承差不多 **这个继承更像是继承的是物理地址**
+
+
+
+## 6.0 安装镜像
+
+
+
+[ docker.hub 官网] https://hub.docker.com/
+
+
+
+##### 安装tomcat
+
+1. 先去官网上去search   或者直接在Linux里search
+2. 直接pull
+
+    ```
+docker pull tomcat
+    ```
+
+3. run
+
+   ```
+   [root@hadoop100 host_data]# docker run -d -p 8080:8080 --name tomcat tomcat
+   ```
+
+4. 测试
+
+
+
+![image-20230427161033075](..\docker_study\imgs\image-20230427161033075.png)
+
+>  原因：
+
+​	因为tomcat的最新版本webapps里面是空的
+
+
+
+- 进入tomcat
+
+```
+[root@hadoop100 host_data]# docker exec -it 21b1b27910ac /bin/bash
+```
+
+
+
+- 查看tomcat目录 中webapps
+
+```
+root@21b1b27910ac:/usr/local/tomcat# ls -l
+total 132
+drwxr-xr-x. 2 root root     6 Dec 22  2021 webapps
+drwxr-xr-x. 7 root root    81 Dec  2  2021 webapps.dist
+#查看webapps
+root@21b1b27910ac:/usr/local/tomcat# cd webapps
+root@21b1b27910ac:/usr/local/tomcat/webapps# ls -a
+.  ..
+
+#删除webapps
+root@21b1b27910ac:/usr/local/tomcat# rm -rf webapps
+#重署名
+root@21b1b27910ac:/usr/local/tomcat# mv webapps.dist webapps
+#重启tomcat
+docker restart tomcat
+```
+
+> 运行结果：
+
+![image-20230428093156992](..\docker_study\imgs\image-20230428093156992.png)
+
+
+
+- 不需要配置的tomcat
+
+```
+[root@hadoop100 ~]# docker run -d -p 8080:8080 --name mytomcat8 billygoo/tomcat8-jdk8
+```
+
+
+
+##### 安装MySQL
+
+###### 简单安装MySQL
+
+- 查看当前Linux中有没有启动的MySQL
+
+   -e     Select all processes.  Identical to -A.
+
+  -f     Do full-format listing. This option can be combined with many other UNIX-style options to add additional columns.  It also causes the command arguments to be printed.
+
+```
+[root@hadoop100 ~]# ps -ef | grep mysql
+root      11031   9057  0 10:05 pts/0    00:00:00 grep --color=auto mysql
+```
+
+
+
+- 创建容器
+  - 语法来自dockr官网[mysql - Official Image | Docker Hub](https://hub.docker.com/_/mysql)
+
+```
+[root@hadoop100 ~]# docker run --name mysql5.7 -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7
+ef408c6c63c67aee2efe9fd85f452eebee2aa97fb62b0374c9f52f19b25b0df4
+
+```
+
+
+
+- 进入mysq
+
+  ```
+  [root@hadoop100 ~]# docker exec -it 42e72bfdd503 /bin/bash
+  root@42e72bfdd503:/# mysql -uroot -p123456
+  ```
+
+- 创建数据库
+
+  ```
+  #展示数据库
+  mysql> show databases;
+  +--------------------+
+  | Database           |
+  +--------------------+
+  | information_schema |
+  | mysql              |
+  | performance_schema |
+  | sys                |
+  +--------------------+
+  4 rows in set (0.00 sec)
+  #创建数据库
+  mysql> create database db01;
+  Query OK, 1 row affected (0.01 sec)
+  
+  mysql> show databases;
+  +--------------------+
+  | Database           |
+  +--------------------+
+  | information_schema |
+  | db01               |
+  | mysql              |
+  | performance_schema |
+  | sys                |
+  +--------------------+
+  5 rows in set (0.00 sec)
+  #进入数据库
+  mysql> use db01
+  Database changed
+  #创建表
+  mysql> create table t1(id int ,name varchar(20));
+  Query OK, 0 rows affected (0.00 sec)
+  #插入
+  mysql> insert into t1 values(1,"wmt");
+  Query OK, 1 row affected (0.00 sec)
+  #查找
+  mysql> select * from t1 where id=1;
+  +------+------+
+  | id   | name |
+  +------+------+
+  |    1 | wmt  |
+  +------+------+
+  1 row in set (0.00 sec)
+  
+  
+  ```
+
+- 中文乱码问题
+
+  - 查看字符编码  latin1
+
+  ```
+  mysql> SHOW VARIABLES LIKE 'character%' ;
+  +--------------------------+----------------------------+
+  | Variable_name            | Value                      |
+  +--------------------------+----------------------------+
+  | character_set_client     | latin1                     |
+  | character_set_connection | latin1                     |
+  | character_set_database   | latin1                     |
+  | character_set_filesystem | binary                     |
+  | character_set_results    | latin1                     |
+  | character_set_server     | latin1                     |
+  | character_set_system     | utf8                       |
+  | character_sets_dir       | /usr/share/mysql/charsets/ |
+  
+  ```
+
+###### 实战安装MySQL
+
+> 解决中文乱码问题
+>
+> 解决数据丢失问题
+
+
+
+- 创建容器
+
+```
+[root@hadoop100 ~]# docker run -d -p 3306:3306 --name mysql5.7 --privileged=true\
+-v /docker/mysql/log:/var/log/mysql \
+-v /docker/mysql/data:/var/lib/mysql \
+-v /docker/mysql/conf:/etc/mysql/conf.d \
+-e MYSQL_ROOT_PASSWORD=123456 mysql:5.7\
+
+docker run -d -p 3306:3306 --name mysql5.7 --privileged=true -v /docker/mysql/log:/var/log/mysql -v /docker/mysql/data:/var/lib/mysql -v /docker/mysql/conf:/etc/mysql/conf.d -e MYSQL_ROOT_PASSWORD=123456 mysql:5.7
+
+```
+
+
+
+- 配置文件防止乱码 my.cnf
+
+```
+[root@hadoop100 conf]# pwd
+/docker/mysql/conf
+[root@hadoop100 conf]# vim my.cnf
+[root@hadoop100 conf]# cat my.cnf 
+
+[mysqld]
+collation-server = utf8_general_ci
+#服务端使用的字符集默认为utf-8
+character-set-server=utf8
+[client]
+#客户端使用的字符集默认为utf8
+default-character-set=utf8
+
+# 记住要重启MySQL容器
+#一定要在客户端运行字符编码检测
+#删除容器只要容器卷还在数据会自动恢复
+mysql> SHOW VARIABLES LIKE 'character%' ;
++--------------------------+----------------------------+
+| Variable_name            | Value                      |
++--------------------------+----------------------------+
+| character_set_client     | utf8                       |
+| character_set_connection | utf8                       |
+| character_set_database   | utf8                       |
+| character_set_filesystem | binary                     |
+| character_set_results    | utf8                       |
+| character_set_server     | utf8                       |
+| character_set_system     | utf8                       |
+| character_sets_dir       | /usr/share/mysql/charsets/ |
++--------------------------+----------------------------+
+8 rows in set (0.01 sec)
+
+```
+
+
+
+
+
+#####  安装redis
+
+- 安装最新版 
+
+  - docker pull redis
+
+    ```
+    [root@hadoop100 ~]# docker pull redis
+    
+    #查看最新版的具体版本 6.2.6
+    
+    [root@hadoop100 ~]# docker image inspect 7614ae9453d1 | grep -i version
+                    "GOSU_VERSION=1.12",
+                    "REDIS_VERSION=6.2.6",
+            "DockerVersion": "20.10.7",
+                    "GOSU_VERSION=1.12",
+                    "REDIS_VERSION=6.2.6",
+    
+    ```
+
+
+
+###### 下载redis配置文件
+
+
+
+​    -   根据版本去官网下配置文件  https://raw.githubusercontent.com/redis/redis/6.2/redis.conf
+
+​        把配置文件放在redis.conf文件中通过Xftp工具上传到Linux系统文件中通过容器卷和redis绑定
+
+​		
+
+``` 
+[root@hadoop100 redis]# mkdir /docker/redis
+#Xftp上传到redis中
+[root@hadoop100 redis]# ls
+redis.conf
+[root@hadoop100 redis]# pwd
+/docker/redis
+```
+
+
+
+###### 修改配置文件
+
+```
+注掉 允许外部访问
+#bind 127.0.0.1 -::1
+
+注释  或者no   因为配置会和docker run -d参数起冲突
+daemonize no
+
+数据持久化开启
+appendonly yes
+
+连接安全问题
+protected-mode yes  
+
+```
+
+
+
+###### 创建容器
+
+```
+[root@hadoop100 redis]# docker run -p 6379:6379 --name myredis6.2.6 --privileged=true -v /docker/redis/redis.conf:/etc/redis/redis.conf -v /docker/redis/data:/data -d redis redis-server /etc/redis/redis.conf
+
+```
+
+```
+[root@hadoop100 redis]# docker run -p 6379:6379 --name myredis6.2.6 --privileged=true 
+-v /docker/redis/redis.conf:/etc/redis/redis.conf 
+-v /docker/redis/data:/data 
+-d 
+#镜像名称
+redis  
+#启动方式
+redis-server /etc/redis/redis.conf
+
+```
+
+
+
+##### 测试配置文件是否生效
+
+- 配置文件
+
+```
+# Set the number of databases. The default database is DB 0, you can select
+# a different one on a per-connection basis using SELECT <dbid> where
+# dbid is a number between 0 and 'databases'-1
+databases 15
+
+```
+
+- 测试
+
+```
+[root@hadoop100 redis]# docker exec -it 8a652e3ad7d4 /bin/bash
+root@8a652e3ad7d4:/data# redis-cli  
+127.0.0.1:6379> select 15
+OK
+```
+
+
+
+- 修改配置文件
+
+```
+  # Set the number of databases. The default database is DB 0, you can select
+  # a different one on a per-connection basis using SELECT <dbid> where
+  # dbid is a number between 0 and 'databases'-1
+  databases 10
+```
+
+  
+
+- 测试
+
+```
+[root@hadoop100 redis]# docker exec -it 8a652e3ad7d4 /bin/bash
+root@8a652e3ad7d4:/data# ll
+bash: ll: command not found
+root@8a652e3ad7d4:/data# redis-cli
+127.0.0.1:6379> select 15
+(error) ERR DB index is out of range
+
+```
+
+
+
+##### 配置密码
+
+```
+[root@hadoop100 redis]# docker exec -it myredis6.2.6 /bin/bash
+root@8a652e3ad7d4:/data# redis-cli
+127.0.0.1:6379> config set requirepass 123456
+OK
+#登录
+127.0.0.1:6379> ping
+(error) NOAUTH Authentication required.
+127.0.0.1:6379> auth 123456
+OK
+
+```
+
+
+
+
+
+## docker高级篇
+
+> 主从复制
+
+![image-20230428210819372](..\docker_study\imgs\image-20230428210819372.png)
+
+
+
+1. 同一MySQL版本
+2. 同一网段 可以互相ping通
+3. 配置主机MySQL中的my.ini 主 配置    
+   1. server-id=1                   主服务器唯一ID
+   
+   2. log-bin=C:/ProgramData/MySQL/MySQL Server 5.7/Data/mysqlbin         启动二进制日志             本地MySQL路径/mysqlbin
+   
+   3. log-err=C:/ProgramData/MySQL/MySQL Server 5.7/Data/mysqlerr          启动二进制日志             本地MySQL路径/mysqlerr
+   
+   4. basedir=C:/ProgramData/MySQL\MySQL Server 5.7                                    basedir=自己本地路径                          [可选] 根目录
+   
+   5.  binlog-ignore=                                                                                                      设置不需要复制的数据库
+   
+   6. binlog-do-db=需要复制数据库的名字
+   
+      
+   
+      
+
+4. 配置从机 my.cnf
+   1. server-id=2                                                           不能为一
+   2. log-bin=mysql-bin
+
+
+
+
+
+
+
+docker中主MySQL配置 my.cnf
+
+```
+
+
+[mysqld]
+collation-server = utf8_general_ci
+#服务端使用的字符集默认为utf-8
+character-set-server=utf8
+#局域网唯一id
+#设置server_id,同一局域网中需要唯一
+server_id=101
+#指定不需要同步的数据库名称
+binlog-ignore-db=mysql
+#开启二进制日志功能
+log-bin=mall-mysql-bin
+#设置二进制日志使用内存大小(事务)
+binlog_cache_size=1M
+#设置使用的二进制日志格式( mixed, statement, row)
+binlog_format=mixed
+#二进制日志过期清理时间。默认值为0,表示不自动清理。
+expire_logs_days=7
+#跳过主从复制中遇到的所有错误或指定类型的错误，避免slave端复制中断。
+#如: 1062错误是指一些主键重复，1032错误是因为主从数据库数据不一致
+slave_skip_errors=1062
+[client]
+#客户端使用的字符集默认为utf8
+default-character-set=utf8                                
+```
+
+
+
+重新启动服务器
+
+
+
+查看能否登录成功
+
+```
+root@5875c3c977f6:/# mysql -uroot -p123456
+```
+
+创建数据同步用户
+
+```
+create user 'wmt_slave'@'%' identified by '123456';
+grant replication slave,replication client on *.* to 'wmt_slave'@'%';
+
+CREATE USER 'wmt'@'%' IDENTIFIED BY '123456';
+GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'wmt'@'%';
+# 查看用户
+select user,host from mysql.user; 
++---------------+-----------+
+| user          | host      |
++---------------+-----------+
+| root          | %         |
+| wmt           | %         |
+| mysql.session | localhost |
+| mysql.sys     | localhost |
+| root          | localhost |
++---------------+-----------+
+
+```
+
+创建从数据库
+
+```
+[root@hadoop100 conf]# docker run -d -p 3307:3306 --name mysql5.7_copy --privileged=true -v     /docker/mysql/log_copy:/var/log/mysql -v /docker/mysql/data_copy:/var/lib/mysql -v /docker/mysql/conf_copy:/etc/mysql/conf.d -e MYSQL_ROOT_PASSWORD=123456 mysql:5.7
+
+
+
+docker run -d -p 3307:3306 --name mysql5.7_copy --privileged=true 
+-v /docker/mysql/log_copy:/var/log/mysql 
+-v /docker/mysql/data_copy:/var/lib/mysql 
+-v /docker/mysql/conf_copy:/etc/mysql/conf.d 
+-e MYSQL_ROOT_PASSWORD=123456 mysql:5.7
+
+```
+
+配置从机数据库
+
+```
+
+
+[mysqld]
+collation-server = utf8_general_ci
+#服务端使用的字符集默认为utf-8
+character-set-server=utf8
+#局域网唯一id
+#设置server_id,同一局域网中需要唯一
+server_id=102
+#指定不需要同步的数据库名称
+binlog-ignore-db=mysql
+#开启二进制日志功能，以备Slave作为其它数据库实例的Master时使用.
+log-bin=mall-mysql-slave1-bin
+#设置二进制日志使用内存大小(事务)
+binlog_cache_size=1M
+#设置使用的二进制日志格式( mixed, statement, row)
+binlog_format=mixed
+##二进制日志过期清理时间。默认值为0，表示不自动清理。
+expire_logs_days=7
+#跳过主从复制中遇到的所有错误或指定类型的错误,避免slave端复制中断。
+#如: 1062错误是指一些主键重复，1032错误是因为主从数据库数据不一致
+slave_skip_errors=1062
+# relay_log配置中继日志
+relay_log=mall-mysql-relay-bin
+# log_slave_updates表示slave将复制事件写进自己的二进制日志
+log_slave_updates=1
+# slave设置为只读(具有super权限的用户除外)
+read_only=1
+[client]
+#客户端使用的字符集默认为utf8
+default-character-set=utf8   
+```
+
+重新启动服务
+
+```
+[root@hadoop100 conf_copy]# docker restart 9e7669e3338b
+
+```
+
+
+
+主机查看主从复制的状态
+
+```
+mysql> show master status;
+
++-----------------------+----------+--------------+------------------+-------------------+
+| File                  | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
++-----------------------+----------+--------------+------------------+-------------------+
+| mall-mysql-bin.000001 |      621 |              | mysql            |                   |
++-----------------------+----------+--------------+------------------+-------------------+
+1 row in set (0.01 sec)
+
+```
+
+
+
+进入从机
+
+```
+[root@hadoop100 conf_copy]# docker exec -it 9e7669e3338b /bin/bash
+root@9e7669e3338b:/# mysql -uroot -p123456
+
+```
+
+
+
+从机申请连接
+
+```
+change master to master_host='192.168.206.100', master_user='wmt_slave', master_password='1234567', master_port=3306, master_log_file='mall-mysql-bin.000002', master_log_pos=334, master_connect_retry=30;
+
+mysql> change master to master_host='192.168.206.100', master_user='wmt', master_password='123456', master_port=3306, master_log_file='mall-mysql-bin.000001', master_log_pos=621, master_connect_retry=30;
+Query OK, 0 rows affected, 2 warnings (0.02 sec)
+
+```
+
+
+
+
+
+查看从机信息    /G   会以k v  键值对展示
+
+```
+mysql> show slave status /G;
+            Slave_IO_Running: No             IO还没开始
+            Slave_SQL_Running: No            MySQL还没开始
+
+```
+
+
+
+启动从数据库接收同步
+
+```
+# 停止
+mysql> stop slave ;
+mysql> start slave ;
+Query OK, 0 rows affected (0.03 sec)
+
+mysql> show slave status /G;
+             Slave_IO_Running: Yes
+            Slave_SQL_Running: Yes
+
+```
+
+
+
+
+
+####  搭建MySQL主从复制
+
+>  主MySQL
+
+- 创建文件
+
+```
+mkdir /mysql/mysql_master/conf
+
+touch my.cnf
+
+```
+
+- 编写配置文件 
+
+```
+
+
+[mysqld]
+collation-server = utf8_general_ci
+#服务端使用的字符集默认为utf-8
+character-set-server=utf8
+#局域网唯一id
+#设置server_id,同一局域网中需要唯一
+server_id=101
+#指定不需要同步的数据库名称
+binlog-ignore-db=mysql
+#开启二进制日志功能
+log-bin=mall-mysql-bin
+#设置二进制日志使用内存大小(事务)
+binlog_cache_size=1M
+#设置使用的二进制日志格式( mixed, statement, row)
+binlog_format=mixed
+#二进制日志过期清理时间。默认值为0,表示不自动清理。
+expire_logs_days=7
+#跳过主从复制中遇到的所有错误或指定类型的错误，避免slave端复制中断。
+#如: 1062错误是指一些主键重复，1032错误是因为主从数据库数据不一致
+slave_skip_errors=1062
+[client]
+#客户端使用的字符集默认为utf8
+default-character-set=utf8    
+```
+
+- 创建主机容器
+
+```
+[root@hadoop100 conf]# docker run -d -p 3307:3306 --name mysql_master --privileged=true -v /mysql/mysql_master/conf:/etc/mysql/conf.d -v /mysql/mysql_master/log:/var/log/mysql -v /mysql/mysql_master/data:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=123456 mysql:5.7
+c73a5dc82ae2d96a9243fbb3a3813de1f1d71866e220cc05fa4f6be4d3b53f6f
+[root@hadoop100 conf]# docker ps
+CONTAINER ID   IMAGE                   COMMAND                   CREATED         STATUS         PORTS                                                  NAMES
+c73a5dc82ae2   mysql:5.7               "docker-entrypoint.s…"   6 seconds ago   Up 5 seconds   33060/tcp, 0.0.0.0:3307->3306/tcp, :::3307->3306/tcp   mysql_master
+
+```
+
+- 进入主MySQL
+
+```
+[root@hadoop100 mysql]# docker exec -it c73a5dc82ae2 /bin/bash
+root@c73a5dc82ae2:/# mysql -uroot -p
+Enter password: 
+
+```
+
+
+
+- 创建数据同步用户
+
+```
+#创建用户
+mysql> create user 'wmt_slave'@'%' identified by '123456';
+Query OK, 0 rows affected (0.01 sec)
+#给于条件
+mysql> grant replication slave,replication client on *.* to 'wmt_slave'@'%';
+Query OK, 0 rows affected (0.00 sec)
+#查看用户
+mysql> select user,host from mysql.user; 
++---------------+-----------+
+| user          | host      |
++---------------+-----------+
+| root          | %         |
+| wmt_slave     | %         |
+| mysql.session | localhost |
+| mysql.sys     | localhost |
+| root          | localhost |
++---------------+-----------+
+5 rows in set (0.00 sec)
+
+```
+
+
+
+- 查看主机状态             
+
+```
+mysql> show master status ;
++-----------------------+----------+--------------+------------------+-------------------+
+| File                  | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
++-----------------------+----------+--------------+------------------+-------------------+
+| mall-mysql-bin.000003 |      625 |              | mysql            |                   |
++-----------------------+----------+--------------+------------------+-------------------+
+1 row in set (0.00 sec)
+
+```
+
+> 从机会使用到上面数据
+
+
+
+> 从MySQL
+
+- 创建目录
+
+```
+mkdir /mysql/mysql_slave/conf
+[root@hadoop100 conf]# pwd
+/mysql/mysql_slave/conf
+#创建从机配置文件
+[root@hadoop100 conf]# touch my.cnf
+[root@hadoop100 conf]# vim my.cnf
+
+```
+
+ 
+
+- 编写从机配置文件
+
+```
+
+
+[mysqld]
+collation-server = utf8_general_ci
+#服务端使用的字符集默认为utf-8
+character-set-server=utf8
+#局域网唯一id
+#设置server_id,同一局域网中需要唯一
+server_id=102
+#指定不需要同步的数据库名称
+binlog-ignore-db=mysql
+#开启二进制日志功能，以备Slave作为其它数据库实例的Master时使用.
+log-bin=mall-mysql-slave1-bin
+#设置二进制日志使用内存大小(事务)
+binlog_cache_size=1M
+#设置使用的二进制日志格式( mixed, statement, row)
+binlog_format=mixed
+##二进制日志过期清理时间。默认值为0，表示不自动清理。
+expire_logs_days=7
+#跳过主从复制中遇到的所有错误或指定类型的错误,避免slave端复制中断。
+#如: 1062错误是指一些主键重复，1032错误是因为主从数据库数据不一致
+slave_skip_errors=1062
+# relay_log配置中继日志
+relay_log=mall-mysql-relay-bin
+# log_slave_updates表示slave将复制事件写进自己的二进制日志
+log_slave_updates=1
+# slave设置为只读(具有super权限的用户除外)
+read_only=1
+[client]
+#客户端使用的字符集默认为utf8
+default-character-set=utf8   
+```
+
+
+
+- 创建从机容器
+
+```
+[root@hadoop100 mysql]# docker run -d -p 3308:3306 --name mysql_slave --privileged=true -v /mysql/mysql_slave/conf:/etc/mysql/conf.d -v /mysql/mysql_slave/log:/var/log/mysql -v /mysql/mysql_slave/data:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=123456 mysql:5.7
+4c49fb59a09bd6dc592813d3e66372e3f06b8a10e541865f4c403631cd5fd3ac
+[root@hadoop100 mysql]# docker ps
+CONTAINER ID   IMAGE                   COMMAND                   CREATED          STATUS          PORTS                                                  NAMES
+4c49fb59a09b   mysql:5.7               "docker-entrypoint.s…"   3 seconds ago    Up 2 seconds    33060/tcp, 0.0.0.0:3308->3306/tcp, :::3308->3306/tcp   mysql_slave
+
+```
+
+- 进入从机MySQL
+
+```
+[root@hadoop100 mysql]# docker exec -it 4c49fb59a09b /bin/bash
+root@4c49fb59a09b:/# mysql -uroot -p
+
+```
+
+
+
+- 从机申请连接
+
+```
+mysql> change master to master_host='192.168.206.100', master_user='wmt_slave', master_password='123456', master_port=3307, master_log_file='mall-mysql-bin.000003', master_log_pos=625, master_connect_retry=30;
+Query OK, 0 rows affected, 2 warnings (0.03 sec)
+
+change master to 
+master_host='192.168.206.100', 
+master_user='wmt_slave', master_password='123456', 
+master_port=3306, 
+master_log_file='mall-mysql-bin.000003', 
+master_log_pos=625, 
+master_connect_retry=30;
+```
+
+> master_host：主数据库的IP地址；
+> master_port：主数据库的运行端口；
+> master_user：在主数据库创建的用于同步数据的用户账号；
+> master_password：在主数据库创建的用于同步数据的用户密码；
+> master_log_file：指定从数据库要复制数据的日志文件，通过查看主数据的状态，获取File参数；
+> master_log_pos：指定从数据库从哪个位置开始复制数据，通过查看主数据的状态，获取Position参数；
+> master_connect_retry：连接失败重试的时间间隔，单位为秒。
+
+
+
+
+
+- 查看从机配置                show slave status \G;       \G以 k v键值对展示
+
+  ```
+  mysql> show slave status \G;
+  *************************** 1. row ***************************
+                 Slave_IO_State: 
+                    Master_Host: 192.168.206.100
+                    Master_User: wmt_slave
+                    Master_Port: 3306
+                  Connect_Retry: 30
+                Master_Log_File: mall-mysql-bin.000003
+            Read_Master_Log_Pos: 625
+                 Relay_Log_File: mall-mysql-relay-bin.000001
+                  Relay_Log_Pos: 4
+          Relay_Master_Log_File: mall-mysql-bin.000003
+               Slave_IO_Running: No        
+              Slave_SQL_Running: No
+  
+  ```
+
+  >             Slave_IO_Running: No     同步状态    
+  >             Slave_SQL_Running: No    同步状态
+
+
+
+- 开启从MySQL                       stop slave 停止同步
+
+```
+mysql> start slave;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> show slave status \G;
+*************************** 1. row ***************************
+               Slave_IO_State: Waiting for master to send event
+                  Master_Host: 192.168.206.100
+                  Master_User: wmt_slave
+                  Master_Port: 3307
+                Connect_Retry: 30
+              Master_Log_File: mall-mysql-bin.000003
+          Read_Master_Log_Pos: 625
+               Relay_Log_File: mall-mysql-relay-bin.000002
+                Relay_Log_Pos: 325
+        Relay_Master_Log_File: mall-mysql-bin.000003
+             Slave_IO_Running: Yes
+            Slave_SQL_Running: Yes
+
+```
+
+>             Slave_IO_Running: Yes
+>             Slave_SQL_Running: Yes
+
+
+
+自己去测试
+
+
+
+
+
+面试题： 如果有2亿条数据需要进行缓存，请问如何设计这个存储案例
+
+单机肯定不可能实现，
+
+2亿条记录就是2亿个k,v， 我们单机不行必须要分布式多机，假设有3台机器构成-一个集群，用户每次读写操作都是根据公式:
+hash(key) % N个机器台数，计算出哈希值，用来决定数据映射到哪-一个节点上。
+
+优点：
+
+简单方便，快捷只需要估计好数据规划好节点，列如3，6，9，就能保证一段时间的数据支持，使用hash算法固定要一部分请求落到同一台服务器上面，这样每一台服务器固定处理这些请求，起到负载均衡+分而处理的作用。
+
+
+
+缺点：
+
+如果其中一台服务挂了，或者进行扩容和缩容就比较麻烦了每次数据变动导致节点变动，映射关系需要重新计算，在服务器个数固定不变的时候没有问题，当服务器个数改变时候取模公式会发生变化hash(key)3会变成hash(Key)?。如果地址经过redis机器宕机，由于台数变化，会导致hash取余数据重新洗牌。
+
+
+
+43级
