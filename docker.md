@@ -1,3 +1,5 @@
+
+
 # docker
 
 ## 1.0 docker 安装
@@ -1869,7 +1871,7 @@ hash(key) % N个机器台数，计算出哈希值，用来决定数据映射到�
 
 
 
-<img src="..\redis-study\imgs\image-20230520112636768.png" alt="image-20230520112636768" style="zoom:67%;" />
+<img src="..\docker-study\imgs\image-20230520112636768.png" alt="image-20230520112636768" style="zoom:67%;" />
 
 - 节点映射
 
@@ -1879,7 +1881,7 @@ hash(key) % N个机器台数，计算出哈希值，用来决定数据映射到�
 
 
 
-<img src="..\redis-study\imgs\image-20230520114627451.png" alt="image-20230520114627451" style="zoom:67%;" />
+<img src="..\docker_study\imgs\image-20230520114627451.png" alt="image-20230520114627451" style="zoom:67%;" />
 
 
 
@@ -1891,7 +1893,7 @@ hash(key) % N个机器台数，计算出哈希值，用来决定数据映射到�
 
 如我们有Object A、Object B、Object C、Object D四个数据对象，经过哈希计算后，在环空间上的位置如下:根据- -致性Hash算法， 数据A会被定为到Node A上，B被定为到Node B上，C被定为到Node C上，D被定为到Node D上。
 
-<img src="..\redis-study\imgs\image-20230520114927188.png" alt="image-20230520114927188" style="zoom:67%;" />
+<img src="..\docker_study\imgs\image-20230520114927188.png" alt="image-20230520114927188" style="zoom:67%;" />
 
 
 
@@ -1905,7 +1907,7 @@ hash(key) % N个机器台数，计算出哈希值，用来决定数据映射到�
 
 
 
-<img src="..\redis-study\imgs\image-20230520115735536.png" alt="image-20230520115735536" style="zoom:67%;" />
+<img src="..\docker_study\imgs\image-20230520115735536.png" alt="image-20230520115735536" style="zoom:67%;" />
 
 
 
@@ -1915,7 +1917,7 @@ hash(key) % N个机器台数，计算出哈希值，用来决定数据映射到�
 
 ​       数据量增加了，需要增加一台节点NodeX, X的位置在A和B之间，那收到影响的也就是A到X之间的数据，重新把A到X的数据录入到X上即可，**不会导致hash取余全部数据重新洗牌。**
 
-<img src="..\redis-study\imgs\image-20230520120036613.png" alt="image-20230520120036613" style="zoom:67%;" />
+<img src="..\docker_study\imgs\image-20230520120036613.png" alt="image-20230520120036613" style="zoom:67%;" />
 
 
 
@@ -1932,7 +1934,7 @@ hash环的数据倾斜问题
 
 
 
-<img src="..\redis-study\imgs\image-20230520122101899.png" alt="image-20230520122101899" style="zoom:67%;" />
+<img src="..\docker_study\imgs\image-20230520122101899.png" alt="image-20230520122101899" style="zoom:67%;" />
 
 
 
@@ -1976,7 +1978,7 @@ hash环的数据倾斜问题
 
 
 
-<img src="..\redis-study\imgs\image-20230520140529317.png" alt="image-20230520140529317" style="zoom:80%;" />
+<img src="..\docker_study\imgs\image-20230520140529317.png" alt="image-20230520140529317" style="zoom:80%;" />
 
 槽解决的是粒度问题，相当于把粒度变大了，这样便于数据移动。哈希解决的是映射问题，使用key的哈希值来计算所在的槽，便于数据分配。
 
@@ -2008,13 +2010,13 @@ Redis集群中内置了16384个哈希槽，redis 会根据节点数量大致均�
 
 
 
-<img src="..\redis-study\imgs\image-20230520142253797.png" alt="image-20230520142253797" style="zoom:80%;" />
+![image-20230521152504933](..\docker_study\imgs\image-20230521152504933.png)
 
 
 
 springboot整合了redis才会有lettuce
 
-<img src="..\redis-study\imgs\image-20230520142320565.png" alt="image-20230520142320565" style="zoom: 67%;" />
+<img src="..\docker_study\imgs\image-20230520142320565.png" alt="image-20230520142320565" style="zoom: 67%;" />
 
 
 
@@ -2024,7 +2026,7 @@ springboot整合了redis才会有lettuce
 
 > 本次集群的思维图
 
-![image-20230520153221872](..\redis-study\imgs\image-20230520153221872.png)
+![image-20230520153221872](..\docker_study\imgs\image-20230520153221872.png)
 
 > 关闭防火墙 + 启动docker后台服务器
 
@@ -2088,7 +2090,7 @@ e5e7c2a80695   7614ae9453d1   "docker-entrypoint.s…"   19 seconds ago       Up
 
 
 
-##### 构建redis主从关系
+###### 构建redis主从关系
 
 > 构建redis主从关系
 
@@ -2134,7 +2136,7 @@ Can I set the above configuration? (type 'yes' to accept): yes
 
 
 
-##### 查看集群情况
+###### 查看集群情况
 
 > 查看集群情况
 
@@ -2166,7 +2168,7 @@ cluster_stats_messages_received:1165
 
 
 
-##### 查看主从关系
+###### 查看主从关系
 
 > 本次案例生成的主从关系为
 
@@ -2274,11 +2276,14 @@ OK
 
 
 
-###### 查看集群信息
+###### 查看集群状态
 
 > 查看集群详细信息
 
-因为之前关闭过6381 所以跟上面不一样
+因为之前6381宕机了 所以现在从机变主机6391
+
+- 解释
+  - redis-cli --cluster check ip:port
 
 ```
 
@@ -2321,7 +2326,7 @@ M: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
 
 
 
-![image-20230521113817397](..\redis-study\imgs\image-20230521113817397.png)
+![image-20230521113817397](..\docker_study\imgs\image-20230521113817397.png)
 
 
 
@@ -2457,3 +2462,321 @@ a3ad 192.168.206.100:6393@16393 slave df47 0 1684642358000 3 connected
 总结：
 
 如果之前的主机宕机了，那它的从机就会变成主机，如果之前的主机又起来了，只能是从机了，先来后到的原理
+
+
+
+
+
+##### 主从扩容
+
+> 先恢复之前的三主三从
+
+
+
+![image-20230521143903766](..\docker_study\imgs\image-20230521143903766.png)
+
+
+
+###### 查看当前容器数量
+
+> 查看当前容器数量
+
+```
+#6台三主三从
+[root@hadoop100 ~]# docker ps
+CONTAINER ID   IMAGE          COMMAND                   CREATED        STATUS       PORT     NAMES
+
+eb8c3de1a261   7614ae9453d1   "docker-entrypoint.s…"   23 hours ago   Up 4 hours         redis-node-6
+
+bf206c586328   7614ae9453d1   "docker-entrypoint.s…"   23 hours ago   Up 4 hours         redis-node-5
+
+098af405c246   7614ae9453d1   "docker-entrypoint.s…"   23 hours ago   Up 3 hours         redis-node-4
+
+e5e7c2a80695   7614ae9453d1   "docker-entrypoint.s…"   23 hours ago   Up 4 hours         redis-node-3
+
+0a6298a72e34   7614ae9453d1   "docker-entrypoint.s…"   24 hours ago   Up 4 hours         redis-node-2
+
+5041b6821468   7614ae9453d1   "docker-entrypoint.s…"   24 hours ago   Up 4 hours         redis-node-1
+
+```
+
+
+
+###### 创建6384和6394
+
+> 创建6384和6394
+
+```
+ docker run  -d --name redis-node-7 --net host --privileged=true -v /redis_cluster/redis-node-7/data:/data 7614ae9453d1 --cluster-enabled yes --appendonly yes --port 6384
+ 
+ docker run  -d --name redis-node-8 --net host --privileged=true -v /redis_cluster/redis-node-8/data:/data 7614ae9453d1 --cluster-enabled yes --appendonly yes --port 6394
+ 
+ [root@hadoop100 ~]# docker ps
+CONTAINER ID   IMAGE          COMMAND                   CREATED          STATUS         PORTS  NAMES
+60432fb1b5cd   7614ae9453d1   "docker-entrypoint.s…"   2 seconds ago    Up 2 seconds            redis-node-8
+b499622e8035   7614ae9453d1   "docker-entrypoint.s…"   26 seconds ago   Up 25 seconds           redis-node-7
+
+```
+
+
+
+###### 开始扩容
+
+> 开始扩容
+
+- 解释
+  -  redis-cli --cluster add-node ip:port  ip:port              加入集群
+  - 6384    就是要作为master新增节点
+  - 6381 就是原来集群节点的引路人，相当于6384拜了6381的码头组织加入集群
+
+```
+#进入redis-node-7  
+[root@hadoop100 ~]# docker exec -it redis-node-7 /bin/bash
+#加入集合
+root@hadoop100:/data# redis-cli --cluster add-node 192.168.206.100:6384 192.168.206.100:6381
+>>> Adding node 192.168.206.100:6384 to cluster 192.168.206.100:6381
+>>> Performing Cluster Check (using node 192.168.206.100:6381)
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[5461-10922] (5462 slots) master
+   1 additional replica(s)
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[10923-16383] (5461 slots) master
+   1 additional replica(s)
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots: (0 slots) slave
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+>>> Send CLUSTER MEET to node 192.168.206.100:6384 to make it join the cluster.
+[OK] New node added correctly.             #一个新的节点加入成功
+
+```
+
+
+
+###### 查看当前节点
+
+> 查看当前节点
+
+-  redis-cli --cluster check  ip: port               查看集群节点信息
+
+```
+root@hadoop100:/data# redis-cli --cluster check 192.168.206.100:6381
+#四个节点
+192.168.206.100:6381 (78ba1e57...) -> 2 keys | 5461 slots | 1 slaves. 
+192.168.206.100:6382 (05077ffa...) -> 1 keys | 5462 slots | 1 slaves.
+192.168.206.100:6384 (e72754ec...) -> 0 keys | 0 slots | 0 slaves.    #刚加入的6384master  0 keys 0 slots
+192.168.206.100:6383 (56cbd2b7...) -> 1 keys | 5461 slots | 1 slaves.
+[OK] 4 keys in 4 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.206.100:6381)
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[5461-10922] (5462 slots) master
+   1 additional replica(s)
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+M: e72754ec63a7efdf59de3ee02d735c37fd56278f 192.168.206.100:6384
+   slots: (0 slots) master
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[10923-16383] (5461 slots) master
+   1 additional replica(s)
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots: (0 slots) slave
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+
+```
+
+
+
+###### 重新分配槽号
+
+> 重新分配槽号
+
+当前分区是这样
+
+<img src="..\docker_study\imgs\image-20230521152504933.png" alt="image-20230521152504933" style="zoom:80%;" />
+
+怎么扩容
+
+<img src="../docker_study\imgs\image-20230519095118966.png" alt="image-20230521153500134" style="zoom:80%;" />
+
+
+
+> 分配槽号
+
+```
+root@hadoop100:/data# redis-cli --cluster reshard 192.168.206.100:6381
+>>> Performing Cluster Check (using node 192.168.206.100:6381)
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[5461-10922] (5462 slots) master
+   1 additional replica(s)
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+M: e72754ec63a7efdf59de3ee02d735c37fd56278f 192.168.206.100:6384  #没有分配hash槽
+   slots: (0 slots) master
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[10923-16383] (5461 slots) master
+   1 additional replica(s)
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots: (0 slots) slave
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+How many slots do you want to move (from 1 to 16384)? 4096
+What is the receiving node ID? e72754ec63a7efdf59de3ee02d735c37fd56278f   #分配给0slots的master主机
+
+Type 'all' to use all the nodes as source nodes for the hash slots.
+Type 'done' once you entered all the source nodes IDs.
+#选择all
+```
+
+
+
+* 怎么计算分配的槽数
+  * 16384/master
+    * 除以master的数量 不是所以机器的数量
+
+![image-20230521154807267](..\docker_study\imgs\image-20230521154807267.png)
+
+
+
+
+
+> 分槽成功
+
+```
+root@hadoop100:/data# redis-cli --cluster check 192.168.206.100:6381
+192.168.206.100:6381 (78ba1e57...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.206.100:6382 (05077ffa...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.206.100:6384 (e72754ec...) -> 1 keys | 4096 slots | 0 slaves.
+192.168.206.100:6383 (56cbd2b7...) -> 1 keys | 4096 slots | 1 slaves.
+[OK] 4 keys in 4 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.206.100:6381)
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[1365-5460] (4096 slots) master
+   1 additional replica(s)
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[6827-10922] (4096 slots) master
+   1 additional replica(s)
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+M: e72754ec63a7efdf59de3ee02d735c37fd56278f 192.168.206.100:6384
+   slots:[0-1364],[5461-6826],[10923-12287] (4096 slots) master
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[12288-16383] (4096 slots) master
+   1 additional replica(s)
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots: (0 slots) slave
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+```
+
+
+
+> 当前分槽为
+
+![image-20230521161835888](..\docker_study\imgs\image-20230521161835888.png)
+
+
+
+
+
+###### 为主节点分配从节点
+
+- 命令
+  - redis-cli --cluster add-node ip:salve_port  ip:master_port --cluster-salve --cluster-master-id  新主机节点id
+
+```
+#先查看新主机节点id
+root@hadoop100:/data# redis-cli --cluster check 192.168.206.100:6381
+
+M: e72754ec63a7efdf59de3ee02d735c37fd56278f 192.168.206.100:6384
+   slots:[0-1364],[5461-6826],[10923-12287] (4096 slots) master
+
+#为主节点分配从节点
+root@hadoop100:/data# redis-cli --cluster add-node 192.168.206.100:6394 192.168.206.100:6384 --cluster-slave --cluster-master-id e72754ec63a7efdf59de3ee02d735c37fd56278f  #第四台master
+
+
+#查看节点
+root@hadoop100:/data# redis-cli -cluster check 192.168.206.100:6381
+Unrecognized option or bad number of args for: '-cluster'
+root@hadoop100:/data# redis-cli --cluster check 192.168.206.100:6381
+192.168.206.100:6381 (78ba1e57...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.206.100:6382 (05077ffa...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.206.100:6384 (e72754ec...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.206.100:6383 (56cbd2b7...) -> 1 keys | 4096 slots | 1 slaves.
+[OK] 4 keys in 4 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.206.100:6381)
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[1365-5460] (4096 slots) master
+   1 additional replica(s)
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[6827-10922] (4096 slots) master
+   1 additional replica(s)
+S: 5a8684ae49b2af7a922787dd72f322b200d4de44 192.168.206.100:6394     # 从节点6394
+   slots: (0 slots) slave
+   replicates e72754ec63a7efdf59de3ee02d735c37fd56278f               #从节点的主节点id
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+M: e72754ec63a7efdf59de3ee02d735c37fd56278f 192.168.206.100:6384      #主节点
+   slots:[0-1364],[5461-6826],[10923-12287] (4096 slots) master
+   1 additional replica(s)
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[12288-16383] (4096 slots) master
+   1 additional replica(s)
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots: (0 slots) slave
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+
+```
+
+
+
+
+
+##### 主从缩容
+
