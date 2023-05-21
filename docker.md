@@ -1228,7 +1228,7 @@ daemonize no
 appendonly yes
 
 连接安全问题
-protected-mode yes  
+protected-mode no  
 
 ```
 
@@ -1237,12 +1237,12 @@ protected-mode yes
 ###### 创建容器
 
 ```
-[root@hadoop100 redis]# docker run -p 6379:6379 --name myredis6.2.6 --privileged=true -v /docker/redis/redis.conf:/etc/redis/redis.conf -v /docker/redis/data:/data -d redis redis-server /etc/redis/redis.conf
+[root@hadoop100 redis]# docker run -p 36379:6379 --name myredis --privileged=true -v /docker/redis/redis.conf:/etc/redis/redis.conf -v /docker/redis/data:/data -d redis redis-server /etc/redis/redis.conf
 
 ```
 
 ```
-[root@hadoop100 redis]# docker run -p 6379:6379 --name myredis6.2.6 --privileged=true 
+[root@hadoop100 redis]# docker run -p 36379:6379 --name myredis6.2.6 --privileged=true 
 -v /docker/redis/redis.conf:/etc/redis/redis.conf 
 -v /docker/redis/data:/data 
 -d 
@@ -1819,13 +1819,15 @@ mysql> show slave status \G;
 
 
 
+#### 分布式存储之 哈希取余算法
+
 
 
 面试题： 如果有2亿条数据需要进行缓存，请问如何设计这个存储案例
 
 单机肯定不可能实现，
 
-2亿条记录就是2亿个k,v， 我们单机不行必须要分布式多机，假设有3台机器构成-一个集群，用户每次读写操作都是根据公式:
+2亿条记录就是2亿个k,v， 我们单机不行必须要分布式多机，假设有3台机器构成一个集群，用户每次读写操作都是根据公式:
 hash(key) % N个机器台数，计算出哈希值，用来决定数据映射到哪-一个节点上。
 
 优点：
@@ -1840,4 +1842,337 @@ hash(key) % N个机器台数，计算出哈希值，用来决定数据映射到�
 
 
 
-43级
+#### 分布式存储之 一致性哈希算法
+
+>  一致性Hash算法背景
+
+一致性哈希算法在1997年由麻省理工学院中提出的，设计目标是为了解决
+分布式缓存数据变动和映射问题，某个机器单机了，分母数量改变了，自然取余数不0K了。
+
+
+
+> 能干嘛
+
+提出一致性Hash解决方案。目的是当服务器个数发生变动时，尽量减少影响客户端到服务器的映射关系。
+
+
+
+
+
+> 算法构建一致性哈希环
+
+一致性哈希环 
+一致性哈希算法必然有个hash函数并按照算法产生hash值，这个算法的所有可能哈希值会构成一个全量集， **这个集合可以成为一个hash空间.[0,2^32-1]**， 这个是一个线性空间，但是在算法中，我们通过适当的逻辑控制将它首尾相连(0 = 2^32)，这样让它逻辑上形成了一个环形空间。
+
+它也是按照使用取模的方法，前面笔记介绍的节点取模法是对节点(服务器)的数量进行取模。而一致性Hash算法是对2^32取模，简单来说，**一致性Hash算法将整个哈希值空间组织成一个虚拟的圆环，**如假设某哈希函数H的值空间为0-2^32-1 ( 即哈希值是一 个32位无符号整形)，整个哈希环如下图:整个空间按顺时针方向组织，圆环的正上方的点代表0，0点右侧的第一一个点代表1，以此类推，2、3、4、....直到2^32-1， 也就是说0点左
+侧的第一 个点代表2^32-1，0和2^32-1在零 点中方向重合，我们把这个由2^32个点组成的圆环称为Hash环。
+
+
+
+<img src="..\redis-study\imgs\image-20230520112636768.png" alt="image-20230520112636768" style="zoom:67%;" />
+
+- 节点映射
+
+  将集群中各个IP节点映射到环上的某一个位置。
+  将各个服务器使用Hash进行一个哈希，具体可以选择服务器的IP或主机名作为关键字进行哈希，这样每台机器就能确定其在哈希环上的位置。假如
+  4个节点NodeA、 B、C、D,经过IP地址的哈希函数计算(hash(ip))， 使用IP地址哈希后在环空间的位置如下:
+
+
+
+<img src="..\redis-study\imgs\image-20230520114627451.png" alt="image-20230520114627451" style="zoom:67%;" />
+
+
+
+
+
+- key值落到服务器上的规则
+
+当我们需要存储- -个kv键值对时，首先计算key的hash值，hash(key), **将这个key使用相同的函数Hash计算出哈希值并确定此数据在环上的位置，从此位置沿环顺时针“行走”，第一台遇到的服务器就是其应该定位到的服务器，并将该键值对存储在该节点上**。
+
+如我们有Object A、Object B、Object C、Object D四个数据对象，经过哈希计算后，在环空间上的位置如下:根据- -致性Hash算法， 数据A会被定为到Node A上，B被定为到Node B上，C被定为到Node C上，D被定为到Node D上。
+
+<img src="..\redis-study\imgs\image-20230520114927188.png" alt="image-20230520114927188" style="zoom:67%;" />
+
+
+
+> 优点
+
+
+
+- 一致性哈希算法的**容错性**
+
+  ​       假设Node C宕机，可以看到此时对象A、B、D不会受到影响，只有C对象被重定位到Node D。一般的，在一致性Hash算法中，如果一台服务器不可用，**则受影响的数据仅仅是此服务器到其环空间中前一台服务 器(即沿着逆时针方向行走遇到的第一 台服务器)之间数据，其它不会受到影响**。 简单说，就是C挂了，受到影响的只是B、C之间的数据，并且这些数据会转移到D进行存储。
+
+
+
+<img src="..\redis-study\imgs\image-20230520115735536.png" alt="image-20230520115735536" style="zoom:67%;" />
+
+
+
+
+
+- 一致性哈希算法的**扩展性**
+
+​       数据量增加了，需要增加一台节点NodeX, X的位置在A和B之间，那收到影响的也就是A到X之间的数据，重新把A到X的数据录入到X上即可，**不会导致hash取余全部数据重新洗牌。**
+
+<img src="..\redis-study\imgs\image-20230520120036613.png" alt="image-20230520120036613" style="zoom:67%;" />
+
+
+
+
+
+> 缺点
+
+- 一致性哈希算法的数据倾斜问题
+
+hash环的数据倾斜问题
+
+一致性Hash算法在服务 **节点太少时，**容易因为节点分布不均匀而造成**数据倾斜**( 被缓存的对象大部分集中缓存在某一台服务器 上)问题，
+例如系统中只有两台服务器:
+
+
+
+<img src="..\redis-study\imgs\image-20230520122101899.png" alt="image-20230520122101899" style="zoom:67%;" />
+
+
+
+
+
+##### 小总结
+
+为了在节点数目发生改变时尽可能少的迁移数据
+
+将所有的存储节点排列在收尾相接的Hash环.上，每个key在计算Hash后会顺时针找到临近的存储节点存放。而当有节点加入或退出时仅影响该节点在Hash环上顺时针相邻的后续节点。
+
+> 优点
+
+加入和删除节点只影响哈希环中顺时针方向的相邻的节点，对其他节点无影响。
+
+> 缺点
+
+数据的分布和节点的位置有关，因为这些节点不是均匀的分布在哈希环.上的，所以数据在进行存储时达不到均匀分布的效果。.
+
+
+
+
+
+#### 哈希槽分区
+
+##### 是什么
+
+
+
+> 为什么出现
+
+一致性哈希算法的数据偏移量问题
+
+哈希槽实质就是一个数组，数组[0,2^14 -1]形成hash slot空间。
+
+
+
+> 能干什么
+
+解决均匀分配的问题，在数据和节点之间又加入了一层，把这层称为哈希槽(slot) ，用于管理数据和节点之间的关系，现在就相当于节点上放的是槽，槽里放的是数据。
+
+
+
+<img src="..\redis-study\imgs\image-20230520140529317.png" alt="image-20230520140529317" style="zoom:80%;" />
+
+槽解决的是粒度问题，相当于把粒度变大了，这样便于数据移动。哈希解决的是映射问题，使用key的哈希值来计算所在的槽，便于数据分配。
+
+
+
+
+
+> 多少个hash槽
+
+​        一个集群只能有16384个槽， 编号0-16383 (0-2^14-1) 。这些槽会分配给集群中的所有主节点**，分配策略没有要求。可以指定哪些编号的槽分配给哪个主节点。集群会记录节点和槽的对应关系**。解决了节点和槽的关系后，接下来就需要对key求哈希值，然后对16384取余， 余数是几key就落入对应的槽里。slot = CRC16(key) % 16384。以槽为单位移动数据，因为槽的数目是固定的，处理起来比较容易，这样数据移动问题就解决了。
+
+
+
+
+
+> 为什么是16384个槽
+
+(1)**如果槽位为65536，发送心跳信息的消息头:达8k,发送的心跳包过于庞大**。在消息头中最占空间的是myslots[CLUSTER_ SLOTS/8]。 当槽位 为65536时，这块的大小是: 65536+ 8+ 1024=8kb因为每秒钟，redis 节点需要发送一定数量的ping消息作为心跳包，如果槽位为65536，这个ping消息的消息头太大了，浪费带宽。
+
+(2)**redis的集群主节点数量基本不可能超过1000个。集群节点越多，心跳包的消息体内携带的数据越多**。如果节点过1000个，也会导致网络拥堵。因此redis作 者不建议redis cluster节点数量超过1000个。 那么，对于节点数在1000以内的redis cluster集群， 16384个槽位够用了。没有必要拓展到65536个。
+
+(3)**槽位越小， 节点少的情况下，压缩比高，**容易传输Redis主节点的配置信息中它所负责的哈希槽是通过一. 张bitmap的形式来保存的，在传输过程中会对bitmap进行压缩，但是如果bitmap的填充率slots1 /N很高的话(N表示节点数)， bitmap的压缩率就很低。 如果节点数很少，而哈希槽数量很多的话，bitmap的压缩率就很低。
+
+
+
+##### 哈希槽计算
+
+Redis集群中内置了16384个哈希槽，redis 会根据节点数量大致均等的将哈希槽映射到不同的节点。当需要在Redis集群中放置一个 key-value时，redis先对key使用crc16算法算出-一个结果，然后把结果对16384求余数，这样每个key都会对应一个编号在0-16383之间的哈希槽，也就是映射到某个节点上。如下代码，key之A、B在Node2，key之 C落在Node3上
+
+
+
+<img src="..\redis-study\imgs\image-20230520142253797.png" alt="image-20230520142253797" style="zoom:80%;" />
+
+
+
+springboot整合了redis才会有lettuce
+
+<img src="..\redis-study\imgs\image-20230520142320565.png" alt="image-20230520142320565" style="zoom: 67%;" />
+
+
+
+
+
+#### redis集群
+
+> 本次集群的思维图
+
+![image-20230520153221872](..\redis-study\imgs\image-20230520153221872.png)
+
+> 关闭防火墙 + 启动docker后台服务器
+
+```
+#查看docker状态   目前是启动
+[root@hadoop100 ~]# systemctl status docker
+● docker.service - Docker Application Container Engine
+   Loaded: loaded (/usr/lib/systemd/system/docker.service; enabled; vendor preset: disabled)
+   Active: active (running) since 五 2023-05-19 17:24:04 CST; 21h ago
+
+
+#查看防火墙状态   目前是关闭
+[root@hadoop100 ~]# systemctl status firewalld.service 
+● firewalld.service - firewalld - dynamic firewall daemon
+   Loaded: loaded (/usr/lib/systemd/system/firewalld.service; disabled; vendor preset: enabled)
+   Active: inactive (dead)
+     Docs: man:firewalld(1)
+
+```
+
+
+
+> 创建集群容器
+
+- 解释
+  - --net host                                               使用宿主机的ip和端口默认
+  - 7614ae9453d1                                       redis镜像的版本号
+  - --cluster-enabled yes                             开启redis集群
+  - --appendonly yes                                   开启持久化
+  -  --privileged=true -v                               开启宿主机root权限
+  - -v                                                              容器卷
+
+```
+ docker run  -d --name redis-node-1 --net host --privileged=true -v /redis_cluster/redis-node-1/data:/data 7614ae9453d1 --cluster-enabled yes --appendonly yes --port 6381
+ 
+ 
+  docker run  -d --name redis-node-2 --net host --privileged=true -v /redis_cluster/redis-node-2/data:/data 7614ae9453d1 --cluster-enabled yes --appendonly yes --port 6382
+
+  docker run  -d --name redis-node-3 --net host --privileged=true -v /redis_cluster/redis-node-3/data:/data 7614ae9453d1 --cluster-enabled yes --appendonly yes --port 6383
+  
+  docker run  -d --name redis-node-4 --net host --privileged=true -v /redis_cluster/redis-node-4/data:/data 7614ae9453d1 --cluster-enabled yes --appendonly yes --port 6391
+    
+   docker run  -d --name redis-node-5 --net host --privileged=true -v /redis_cluster/redis-node-5/data:/data 7614ae9453d1 --cluster-enabled yes --appendonly yes --port 6392
+      
+   docker run  -d --name redis-node-6 --net host --privileged=true -v /redis_cluster/redis-node-6/data:/data 7614ae9453d1 --cluster-enabled yes --appendonly yes --port 6393
+   
+   
+[root@hadoop100 ~]# docker ps
+CONTAINER ID   IMAGE          COMMAND                   CREATED              STATUS              PORTS                                         NAMES
+eb8c3de1a261   7614ae9453d1   "docker-entrypoint.s…"   2 seconds ago        Up 1 second                                                       redis-node-6
+bf206c586328   7614ae9453d1   "docker-entrypoint.s…"   7 seconds ago        Up 6 seconds                                                      redis-node-5
+098af405c246   7614ae9453d1   "docker-entrypoint.s…"   12 seconds ago       Up 12 seconds                                                     redis-node-4
+e5e7c2a80695   7614ae9453d1   "docker-entrypoint.s…"   19 seconds ago       Up 19 seconds                                                     redis-node-3
+0a6298a72e34   7614ae9453d1   "docker-entrypoint.s…"   About a minute ago   Up About a minute                                                 redis-node-2
+5041b6821468   7614ae9453d1   "docker-entrypoint.s…"   5 minutes ago        Up 5 minutes                                                      redis-node-1
+
+
+```
+
+
+
+> 构建redis主从关系
+
+- 解释
+  - --cluster create ip:port  [ip:port...]                          创建主从关系
+  - --cluster-replicas 1                                                     表示一个master搭建一个slave节点
+
+```
+#先随机进入一个redis
+[root@hadoop100 ~]# docker exec -it  redis-node-1 /bin/bash
+#构建主从关系
+root@hadoop100:/data# redis-cli --cluster create 192.168.206.100:6381 192.168.206.100:6382 192.168.206.100:6383 192.168.206.100:6391 192.168.206.100:6392 192.168.206.100:6393 --cluster-replicas 1
+
+# 采取的是哈希槽分区 16384个槽  分成了 0 - 5460   5461 - 10922 10923 - 16383
+>>> Performing hash slots allocation on 6 nodes...
+Master[0] -> Slots 0 - 5460   
+Master[1] -> Slots 5461 - 10922
+Master[2] -> Slots 10923 - 16383
+Adding replica 192.168.206.100:6392 to 192.168.206.100:6381
+Adding replica 192.168.206.100:6393 to 192.168.206.100:6382
+Adding replica 192.168.206.100:6391 to 192.168.206.100:6383
+>>> Trying to optimize slaves allocation for anti-affinity
+[WARNING] Some slaves are in the same host as their master
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[0-5460] (5461 slots) master
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[5461-10922] (5462 slots) master
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[10923-16383] (5461 slots) master
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+Can I set the above configuration? (type 'yes' to accept): yes
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.  #这里算成功了
+
+```
+
+
+
+> 查看集群情况和主从关系
+
+- 解释
+  - cluster  info                                                 查看集群信息
+  - cluster nodes                                              查看节点信息
+
+```
+root@hadoop100:/data# redis-cli -p 6381   #进入redis-node-1
+127.0.0.1:6381> CLUSTER INFO              #查看集群信息
+cluster_state:ok
+cluster_slots_assigned:16384
+cluster_slots_ok:16384                   #已分配的哈希槽
+cluster_slots_pfail:0
+cluster_slots_fail:0
+cluster_known_nodes:6                     #已知道的节点
+cluster_size:3
+cluster_current_epoch:6
+cluster_my_epoch:1
+cluster_stats_messages_ping_sent:585
+cluster_stats_messages_pong_sent:580
+cluster_stats_messages_sent:1165
+cluster_stats_messages_ping_received:575
+cluster_stats_messages_pong_received:585
+cluster_stats_messages_meet_received:5
+cluster_stats_messages_received:1165
+
+
+#本次案例生成的主从关系为
+# 主6393 从6383 
+# 主6392 从6382
+# 主6391 从6381
+127.0.0.1:6381> CLUSTER NODES
+1e80 192.168.206.100:6381@16381 myself,master - 0 1684568367000 1 connected 0-5460  #6381的id=1e80
+
+a3ad 192.168.206.100:6393@16393 slave df47 0 1684568368759 3 connected    #6393的从机id=df47
+
+9336 192.168.206.100:6391@16391 slave 1e80 0 1684568365000 1 connected    #6391的从机id=1e80
+
+5689 192.168.206.100:6382@16382 master - 0 1684568365000 2 connected 5461-10922   #6382的id=5689
+
+df47 192.168.206.100:6383@16383 master - 0 1684568367750 3 connected 10923-16383   #6383的id=df47
+
+36ab 192.168.206.100:6392@16392 slave 5689 0 1684568366745 2 connected      #6392的从机id=5689
+
+```
+
