@@ -258,7 +258,7 @@ OPTIONS说明(常用) :有些是一个减号，有些是两个减号
 
 -P: 随机端口映射，大写P
 
--p: 指定端口映射，小写p
+-p: 指定端口映射，小写p                 -p [宿主机端口]:[容器端口]
 
 
 
@@ -2047,6 +2047,8 @@ springboot整合了redis才会有lettuce
 
 
 
+#####  创建集群容器
+
 > 创建集群容器
 
 - 解释
@@ -2085,6 +2087,8 @@ e5e7c2a80695   7614ae9453d1   "docker-entrypoint.s…"   19 seconds ago       Up
 ```
 
 
+
+##### 构建redis主从关系
 
 > 构建redis主从关系
 
@@ -2130,7 +2134,9 @@ Can I set the above configuration? (type 'yes' to accept): yes
 
 
 
-> 查看集群情况和主从关系
+##### 查看集群情况
+
+> 查看集群情况
 
 - 解释
   - cluster  info                                                 查看集群信息
@@ -2156,23 +2162,298 @@ cluster_stats_messages_pong_received:585
 cluster_stats_messages_meet_received:5
 cluster_stats_messages_received:1165
 
+```
 
+
+
+##### 查看主从关系
+
+> 本次案例生成的主从关系为
+
+ 主6383 从6393 
+ 主6382 从6392
+ 主6381 从6391
+
+
+
+- `myself`：表示当前节点是自己。
+- `master`：表示当前节点是主节点。
+- `slave`：表示当前节点是从节点。
+- `fail?`：表示当前节点可能已经失效。
+- `handshake`：表示当前节点正在进行握手操作。
+- `noaddr`：表示当前节点无法获取到 IP 地址。
+- `disconnected`：表示当前节点已经断开连接。
+- `fail`：表示当前节点已经失效。
+- `failover`：表示当前节点正在进行故障转移操作。
+- `noflags`：表示当前节点没有任何标识符。
+
+```
 #本次案例生成的主从关系为
-# 主6393 从6383 
-# 主6392 从6382
-# 主6391 从6381
+ # 主6383 从6393 
+ # 主6382 从6392
+ # 主6381 从6391
 127.0.0.1:6381> CLUSTER NODES
-1e80 192.168.206.100:6381@16381 myself,master - 0 1684568367000 1 connected 0-5460  #6381的id=1e80
+1e80 192.168.206.100:6381@16381 myself,master - 0 1684568367000 1 connected 0-5460  #主机6381的id=1e80
 
-a3ad 192.168.206.100:6393@16393 slave df47 0 1684568368759 3 connected    #6393的从机id=df47
+a3ad 192.168.206.100:6393@16393 slave df47 0 1684568368759 3 connected    #从6393属于df47
 
-9336 192.168.206.100:6391@16391 slave 1e80 0 1684568365000 1 connected    #6391的从机id=1e80
+9336 192.168.206.100:6391@16391 slave 1e80 0 1684568365000 1 connected    #从6391属于1e80
 
-5689 192.168.206.100:6382@16382 master - 0 1684568365000 2 connected 5461-10922   #6382的id=5689
+5689 192.168.206.100:6382@16382 master - 0 1684568365000 2 connected 5461-10922   #主机6382的id=5689
 
-df47 192.168.206.100:6383@16383 master - 0 1684568367750 3 connected 10923-16383   #6383的id=df47
+df47 192.168.206.100:6383@16383 master - 0 1684568367750 3 connected 10923-16383   #主机6383的id=df47
 
-36ab 192.168.206.100:6392@16392 slave 5689 0 1684568366745 2 connected      #6392的从机id=5689
+36ab 192.168.206.100:6392@16392 slave 5689 0 1684568366745 2 connected      #从6392属于id=5689
+```
+
+
+
+##### 主从容错切换迁移
+
+> 注意集群如果挂了一个不能单独启动得全部重启
+
+
+
+###### 连接错误案例
+
+> 目前是三主三从的情况通过哈希槽分成3个区
+
+```
+Master[0] -> Slots 0 - 5460   
+Master[1] -> Slots 5461 - 10922
+Master[2] -> Slots 10923 - 16383
+```
+
+
+
+> 进入第node_redis_1
+
+```
+[root@hadoop100 ~]# docker exec  -it redis-node-1 /bin/bash
+root@hadoop100:/data# redis-cli -p 6381
+127.0.0.1:6381> 
+
+#往容器中插入值
+127.0.0.1:6381> set k1 v1
+(error) MOVED 12706 192.168.206.100:6383  #错误叫你移动到 哈希槽为 12706的redis
+127.0.0.1:6381> set k2 v2
+OK
+127.0.0.1:6381> set k3 v3
+OK
+127.0.0.1:6381> set k4 v4
+(error) MOVED 8455 192.168.206.100:6382  #错误叫你移动到 哈希槽为 8455的redis
 
 ```
 
+
+
+###### 连接正确案例
+
+- 解释
+
+  - -c表示以集群方式连接
+
+  
+
+```
+[root@hadoop100 ~]# docker exec  -it redis-node-1 /bin/bash
+root@hadoop100:/data# redis-cli -p 6381 -c
+127.0.0.1:6381> set k1 v1           #注意观察端口号
+-> Redirected to slot [12706] located at 192.168.206.100:6383
+OK
+192.168.206.100:6383> set k2 v2  #注意观察端口号
+-> Redirected to slot [449] located at 192.168.206.100:6391
+OK
+192.168.206.100:6391> set k3 v3   #注意观察端口号
+OK
+192.168.206.100:6391> set k4 v4
+-> Redirected to slot [8455] located at 192.168.206.100:6382
+OK
+192.168.206.100:6382>             #注意观察端口号
+```
+
+
+
+###### 查看集群信息
+
+> 查看集群详细信息
+
+因为之前关闭过6381 所以跟上面不一样
+
+```
+
+root@hadoop100:/data# redis-cli --cluster check  192.168.206.100:6381
+192.168.206.100:6382 (05077ffa...) -> 1 keys | 5462 slots | 1 slaves.
+192.168.206.100:6383 (56cbd2b7...) -> 1 keys | 5461 slots | 1 slaves.
+192.168.206.100:6391 (541bb98e...) -> 2 keys | 5461 slots | 1 slaves.
+[OK] 4 keys in 3 masters.         #表示4个keys放在 3个主机上面
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.206.100:6381)
+S: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381   #从机6381
+   slots: (0 slots) slave
+   replicates 541bb98e6982632c573d12b543a91b39bd149336            #主机id为 6391
+   
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382    #主 6382
+   slots:[5461-10922] (5462 slots) master
+   1 additional replica(s)
+   
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392      #从机 6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689                #主机 6382
+   
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393      #从 6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47                #主 6383
+   
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[10923-16383] (5461 slots) master
+   1 additional replica(s)
+   
+M: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
+
+```
+
+
+
+###### 主从容错切换迁移案例
+
+
+
+![image-20230521113817397](..\redis-study\imgs\image-20230521113817397.png)
+
+
+
+先停掉6391的redis
+
+```
+
+127.0.0.1:6381> CLUSTER NODES
+1e80 192.168.206.100:6381@16381 myself,slave 9336 0 1684637786000 7 connected #6381是从机 6381的主机是6391
+
+5689 192.168.206.100:6382@16382 master - 0 1684637789000 2 connected 5461-10922
+
+36ab 192.168.206.100:6392@16392 slave 5689 0 1684637789383 2 connected
+
+a3ad 192.168.206.100:6393@16393 slave f47 0 1684637790398 3 connected
+
+df47 192.168.206.100:6383@16383 master - 0 1684637788000 3 connected 10923-16383
+
+9336 192.168.206.100:6391@16391 master - 0 1684637789000 7 connected 0-5460           #主机6391
+
+
+[root@hadoop100 ~]# docker ps
+CONTAINER ID   IMAGE          COMMAND                   CREATED             STATUS             PORTS                                                     NAMES
+eb8c3de1a261   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago        Up About an hour                                                             redis-node-6
+bf206c586328   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago        Up About an hour                                                             redis-node-5
+098af405c246   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago        Up About an hour                                                             redis-node-4
+e5e7c2a80695   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago        Up About an hour                                                             redis-node-3
+0a6298a72e34   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago        Up About an hour                                                             redis-node-2
+5041b6821468   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago        Up About an hour                                                             redis-node-1
+
+#停止了6391
+[root@hadoop100 ~]# docker stop redis-node-4
+redis-node-4
+[root@hadoop100 ~]# docker ps
+CONTAINER ID   IMAGE          COMMAND                   CREATED             STATUS             PORTS                                                     NAMES
+eb8c3de1a261   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago        Up About an hour                                                             redis-node-6
+bf206c586328   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago        Up About an hour                                                             redis-node-5
+e5e7c2a80695   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago        Up About an hour                                                             redis-node-3
+0a6298a72e34   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago        Up About an hour                                                             redis-node-2
+5041b6821468   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago        Up About an hour  
+
+```
+
+
+
+> 进入6381
+
+`cluster nodes` : 查看节点信息
+
+`fail`：表示当前节点已经失效。
+
+```
+root@hadoop100:/data# redis-cli -p 6381 -c
+127.0.0.1:6381> CLUSTER NODES
+1e80 192.168.206.100:6381@16381 myself,master - 0 1684640847000 8 connected 0-5460 #从机变主机
+
+5689 192.168.206.100:6382@16382 master - 0 1684640847480 2 connected 5461-10922
+
+36ab 192.168.206.100:6392@16392 slave 5689 0 1684640846000 2 connected
+
+a3ad 192.168.206.100:6393@16393 slave df47 0 1684640848000 3 connected
+
+df47 192.168.206.100:6383@16383 master - 0 1684640848502 3 connected 10923-16383
+
+9336 192.168.206.100:6391@16391 master,fail - 1684640733240 1684640725643 7 disconnected  #宕机了fail
+
+#虽然宕机了一个但是数据一样可以查询出来
+127.0.0.1:6381> get k1
+-> Redirected to slot [12706] located at 192.168.206.100:6383
+"v1"
+192.168.206.100:6383> get k2
+-> Redirected to slot [449] located at 192.168.206.100:6381
+"v2"
+192.168.206.100:6381> get k3
+"v3"
+192.168.206.100:6381> get k4
+-> Redirected to slot [8455] located at 192.168.206.100:6382
+"v4"
+
+```
+
+
+
+
+
+> 如果redis-node-1 6391 回来了
+
+```
+[root@hadoop100 redis]# docker ps
+CONTAINER ID   IMAGE          COMMAND                   CREATED        STATUS             PORTS                                                     NAMES
+eb8c3de1a261   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago   Up 2 hours                                                                   redis-node-6
+bf206c586328   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago   Up 2 hours                                                                   redis-node-5
+e5e7c2a80695   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago   Up 2 hours                                                                   redis-node-3
+0a6298a72e34   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago   Up 2 hours                                                                   redis-node-2
+5041b6821468   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago   Up 2 hours                                                                   redis-node-1
+
+#启动redis-node-4 
+[root@hadoop100 redis]# docker start redis-node-4 
+redis-node-4
+[root@hadoop100 redis]# docker ps
+CONTAINER ID   IMAGE          COMMAND                   CREATED        STATUS             PORTS                                                     NAMES
+eb8c3de1a261   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago   Up 2 hours                                                                   redis-node-6
+bf206c586328   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago   Up 2 hours                                                                   redis-node-5
+098af405c246   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago   Up 2 seconds                                                                 redis-node-4
+e5e7c2a80695   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago   Up 2 hours                                                                   redis-node-3
+0a6298a72e34   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago   Up 2 hours                                                                   redis-node-2
+5041b6821468   7614ae9453d1   "docker-entrypoint.s…"   21 hours ago   Up 2 hours                                                                   redis-node-1
+
+```
+
+
+
+> 查看主从关系
+
+ ```
+192.168.206.100:6382> cluster nodes
+36ab 192.168.206.100:6392@16392 slave 5689 0 1684642358490 2 connected
+
+df47 192.168.206.100:6383@16383 master - 0 1684642357000 3 connected 10923-16383
+
+a3ad 192.168.206.100:6393@16393 slave df47 0 1684642358000 3 connected
+
+5689 192.168.206.100:6382@16382 myself,master - 0 1684642357000 2 connected 5461-10922
+
+1e80 192.168.206.100:6381@16381 master - 0 1684642359509 8 connected 0-5460   #仍然是主机 先来后到
+
+9336 192.168.206.100:6391@16391 slave 1e80 0 1684642360531 8 connected        #之前的主机变从机了
+
+ ```
+
+
+
+总结：
+
+如果之前的主机宕机了，那它的从机就会变成主机，如果之前的主机又起来了，只能是从机了，先来后到的原理
