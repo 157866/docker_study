@@ -3111,4 +3111,6 @@ S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
 
 
 
+![image](https://github.com/157866/docker_study/blob/master/imgs/image-20230423122427145.png)
+
 57p
