@@ -2780,3 +2780,335 @@ S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
 
 ##### 主从缩容
 
+> 思想
+
+![image-20230522091024080](C:\Users\34912\Desktop\docker_study\imgs\image-20230522091024080.png)
+
+![image-20230522091024080](..\imgs\image-20230522091024080.png)
+
+
+
+> 目的: 
+>
+> ​	停止从机6394
+>
+> ​	停止主机6384
+
+
+
+###### 查看集群情况
+
+> 去获取从机6394的id
+
+```
+#进入集群
+[root@hadoop100 ~]# docker exec -it redis-node-2 /bin/bash
+#检查Redis集群的状态
+root@hadoop100:/data# redis-cli --cluster check 192.168.206.100:6382
+192.168.206.100:6382 (05077ffa...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.206.100:6384 (e72754ec...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.206.100:6383 (56cbd2b7...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.206.100:6381 (78ba1e57...) -> 1 keys | 4096 slots | 1 slaves.
+[OK] 4 keys in 4 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.206.100:6382)
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[6827-10922] (4096 slots) master
+   1 additional replica(s)
+M: e72754ec63a7efdf59de3ee02d735c37fd56278f 192.168.206.100:6384
+   slots:[0-1364],[5461-6826],[10923-12287] (4096 slots) master
+   1 additional replica(s)
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[12288-16383] (4096 slots) master
+   1 additional replica(s)
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+S: 5a8684ae49b2af7a922787dd72f322b200d4de44 192.168.206.100:6394
+   slots: (0 slots) slave
+   replicates e72754ec63a7efdf59de3ee02d735c37fd56278f
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[1365-5460] (4096 slots) master
+   1 additional replica(s)
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots: (0 slots) slave
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+
+```
+
+
+
+###### 删除从节点
+
+> 删除6394
+
+- 基础命令
+  - redis-cli --cluster del-node ip:端口  节点id
+
+```
+#要删除的从机信息
+S: 5a8684ae49b2af7a922787dd72f322b200d4de44 192.168.206.100:6394
+   slots: (0 slots) slave
+   replicates e72754ec63a7efdf59de3ee02d735c37fd56278f
+   
+#执行删除   
+ root@hadoop100:/data# redis-cli --cluster del-node 192.168.206.100:6394 5a8684ae49b2af7a922787dd72f322b200d4de44
+>>> Removing node 5a8684ae49b2af7a922787dd72f322b200d4de44 from cluster 192.168.206.100:6394
+>>> Sending CLUSTER FORGET messages to the cluster...
+>>> Sending CLUSTER RESET SOFT to the deleted node.
+
+#查看是否删除成功 少了一台从机
+root@hadoop100:/data# redis-cli --cluster check 192.168.206.100:6381
+192.168.206.100:6381 (78ba1e57...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.206.100:6382 (05077ffa...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.206.100:6384 (e72754ec...) -> 1 keys | 4096 slots | 0 slaves.
+192.168.206.100:6383 (56cbd2b7...) -> 1 keys | 4096 slots | 1 slaves.
+[OK] 4 keys in 4 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.206.100:6381)
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[1365-5460] (4096 slots) master
+   1 additional replica(s)
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[6827-10922] (4096 slots) master
+   1 additional replica(s)
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+M: e72754ec63a7efdf59de3ee02d735c37fd56278f 192.168.206.100:6384
+   slots:[0-1364],[5461-6826],[10923-12287] (4096 slots) master
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[12288-16383] (4096 slots) master
+   1 additional replica(s)
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots: (0 slots) slave
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+
+```
+
+
+
+###### 重新分配槽号
+
+* 分槽方式
+  * 把mater分支上的槽位全部分给一个主节点
+  * 把master分支是的槽位平均分给所有主节点
+
+> 本次是把master分支是的槽位平均分给所有主节点
+
+```
+#第一次分配   6384分配1365个槽点给6381
+root@hadoop100:/data# redis-cli --cluster reshard 192.168.206.100:6381
+>>> Performing Cluster Check (using node 192.168.206.100:6381)
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[6827-10922] (4096 slots) master
+   1 additional replica(s)
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+M: e72754ec63a7efdf59de3ee02d735c37fd56278f 192.168.206.100:6384
+   slots:[0-1364],[5461-6826],[10923-12287] (4096 slots) master
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[12288-16383] (4096 slots) master
+   1 additional replica(s)
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots: (0 slots) slave
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+How many slots do you want to move (from 1 to 16384)? 1365                #输入分配多少个槽点
+What is the receiving node ID? 78ba1e5759efe34a26631a25b0a4400329651e80   #6381接收 1365个槽点
+Please enter all the source node IDs.
+  Type 'all' to use all the nodes as source nodes for the hash slots.
+  Type 'done' once you entered all the source nodes IDs.
+Source node #1: e72754ec63a7efdf59de3ee02d735c37fd56278f                 #谁出这个资源 6384
+Source node #2: done                                                     #输入所有源节点id后，键入'done'
+
+
+
+#第二次分配   6384分配1366个槽点给6382
+root@hadoop100:/data# redis-cli --cluster reshard 192.168.206.100:6381
+>>> Performing Cluster Check (using node 192.168.206.100:6381)
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[6827-10922] (4096 slots) master
+   1 additional replica(s)
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+M: e72754ec63a7efdf59de3ee02d735c37fd56278f 192.168.206.100:6384    #此时槽号少了一组
+   slots:[5461-6826],[10923-12287] (2731 slots) master    
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[12288-16383] (4096 slots) master
+   1 additional replica(s)
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots: (0 slots) slave
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+How many slots do you want to move (from 1 to 16384)? 1366               #输入分配多少个槽点
+What is the receiving node ID? 05077ffab7bbb7a8a03c024c648ac092bbf75689   #6382接收 1366个槽点
+Please enter all the source node IDs.
+  Type 'all' to use all the nodes as source nodes for the hash slots.
+  Type 'done' once you entered all the source nodes IDs.
+Source node #1: e72754ec63a7efdf59de3ee02d735c37fd56278f                   #谁出这个资源 6384
+Source node #2: done                                                       #输入所有源节点id后，键入'done'
+
+
+#第三次分配   6384分配1365个槽点给6383
+root@hadoop100:/data# redis-cli --cluster reshard 192.168.206.100:6381
+>>> Performing Cluster Check (using node 192.168.206.100:6381)
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[5461-10922] (5462 slots) master
+   1 additional replica(s)
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+M: e72754ec63a7efdf59de3ee02d735c37fd56278f 192.168.206.100:6384   #6384只剩下一组槽号
+   slots:[10923-12287] (1365 slots) master
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[12288-16383] (4096 slots) master
+   1 additional replica(s)
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots: (0 slots) slave
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+How many slots do you want to move (from 1 to 16384)? 1365
+What is the receiving node ID? 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+Please enter all the source node IDs.
+  Type 'all' to use all the nodes as source nodes for the hash slots.
+  Type 'done' once you entered all the source nodes IDs.
+Source node #1: e72754ec63a7efdf59de3ee02d735c37fd56278f                   #谁出这个资源 6384
+Source node #2: done                                                       #输入所有源节点id后，键入'done'
+
+
+#查看集群情况
+root@hadoop100:/data# redis-cli --cluster cehck 192.168.206.100:6381
+Unknown --cluster subcommand
+root@hadoop100:/data# redis-cli --cluster check 192.168.206.100:6381
+192.168.206.100:6381 (78ba1e57...) -> 2 keys | 5461 slots | 1 slaves.
+192.168.206.100:6382 (05077ffa...) -> 1 keys | 5462 slots | 1 slaves.
+192.168.206.100:6384 (e72754ec...) -> 0 keys | 0 slots | 0 slaves.            #6384此时槽号为0
+192.168.206.100:6383 (56cbd2b7...) -> 1 keys | 5461 slots | 1 slaves.
+[OK] 4 keys in 4 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.206.100:6381)
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[5461-10922] (5462 slots) master
+   1 additional replica(s)
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+M: e72754ec63a7efdf59de3ee02d735c37fd56278f 192.168.206.100:6384
+   slots: (0 slots) master
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[10923-16383] (5461 slots) master
+   1 additional replica(s)
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots: (0 slots) slave
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+
+```
+
+
+
+
+
+###### 删除master主节点
+
+基础命令
+
+- redis-cli --cluster del-node ip:端口  节点id
+
+```
+#删除主节点
+root@hadoop100:/data# redis-cli --cluster del-node 192.168.206.100:6384 e72754ec63a7efdf59de3ee02d735c37fd56278f
+>>> Removing node e72754ec63a7efdf59de3ee02d735c37fd56278f from cluster 192.168.206.100:6384
+>>> Sending CLUSTER FORGET messages to the cluster...
+>>> Sending CLUSTER RESET SOFT to the deleted node.
+
+
+#查看集群情况
+root@hadoop100:/data# redis-cli --cluster check 192.168.206.100:6381
+192.168.206.100:6381 (78ba1e57...) -> 2 keys | 5461 slots | 1 slaves.
+192.168.206.100:6382 (05077ffa...) -> 1 keys | 5462 slots | 1 slaves.
+192.168.206.100:6383 (56cbd2b7...) -> 1 keys | 5461 slots | 1 slaves.
+[OK] 4 keys in 3 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.206.100:6381)
+M: 78ba1e5759efe34a26631a25b0a4400329651e80 192.168.206.100:6381
+   slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
+M: 05077ffab7bbb7a8a03c024c648ac092bbf75689 192.168.206.100:6382
+   slots:[5461-10922] (5462 slots) master
+   1 additional replica(s)
+S: 105ceca39e8e16b2795f679d304ce5c02fb836ab 192.168.206.100:6392
+   slots: (0 slots) slave
+   replicates 05077ffab7bbb7a8a03c024c648ac092bbf75689
+S: 60ceebe6601db538a4ac64859b61d1c4abe6a3ad 192.168.206.100:6393
+   slots: (0 slots) slave
+   replicates 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47
+M: 56cbd2b7aa0ea2072113d6066f9671cdb23fdf47 192.168.206.100:6383
+   slots:[10923-16383] (5461 slots) master
+   1 additional replica(s)
+S: 541bb98e6982632c573d12b543a91b39bd149336 192.168.206.100:6391
+   slots: (0 slots) slave
+   replicates 78ba1e5759efe34a26631a25b0a4400329651e80
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+
+```
+
+
+
+57p
